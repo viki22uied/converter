@@ -155,13 +155,23 @@ namespace Loupedeck.ConverterPlugin
                     current = output;
                 }
 
-                // Move the final intermediate to the requested destination.
+                // Move the final intermediate to the requested destination. The temp working
+                // directory is often on a different volume than the output folder, where
+                // File.Move can fail, so fall back to copy + delete.
                 if (File.Exists(finalPath))
                 {
                     File.Delete(finalPath);
                 }
 
-                File.Move(current, finalPath);
+                try
+                {
+                    File.Move(current, finalPath);
+                }
+                catch (IOException)
+                {
+                    File.Copy(current, finalPath, overwrite: true);
+                }
+
                 producedPath = finalPath;
                 return true;
             }
