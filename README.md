@@ -6,7 +6,7 @@ Everything runs **locally and for free** — nothing is uploaded, no account, no
 
 Built with the [Logi Actions SDK](https://logitech.github.io/actions-sdk-docs/) (C# / .NET 8).
 
-> 🏆 Created by **Team Deep Work AI** — a **Top 50** project in the **Logitech Dev Studio Hackathon**.
+> 🏆 Developed by **Vignesh Kumar U** — a **Top 50** project (team Deep Work) at the **Logitech Dev Studio Hackathon**.
 
 ---
 
@@ -177,12 +177,10 @@ src/
 
 ## Credits
 
-Created by **Team Deep Work AI** — recognised as a **Top 50** project in the **Logitech Dev Studio Hackathon**.
-
-- **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied))
+Developed by **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied)) — a **Top 50** project at the **Logitech Dev Studio Hackathon** (team Deep Work).
 
 ---
 
 ## License
 
-[MIT](LICENSE) © Vignesh Kumar U · Team Deep Work AI
+[MIT](LICENSE) © Vignesh Kumar U
