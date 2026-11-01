@@ -30,7 +30,7 @@ namespace Loupedeck.ConverterPlugin
         protected override void RunCommand(String actionParameter)
         {
             var format = ConversionFormat.All[this._index];
-            ConvertRunner.Run(this.Plugin, format);
+            ConvertRunner.RunLatest(this.Plugin, format);
             this.AdjustmentValueChanged();
         }
 

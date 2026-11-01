@@ -12,7 +12,7 @@ name: Converter
 displayName: File Converter
 
 # Short description of the plugin.
-description: Convert the most recent file in a folder to PDF, Word, PowerPoint, Excel, images and more with a single press, dial or Actions Ring tap. Powered by LibreOffice.
+description: Convert any file to PDF, Word, PowerPoint, Excel, Markdown and more — Word→PowerPoint, PDF→Word, Markdown→PowerPoint and back — with a single press, dial or Actions Ring tap. Powered by LibreOffice and Pandoc.
 
 # Name of the plugin library file.
 pluginFileName: ConverterPlugin.dll
@@ -21,10 +21,10 @@ pluginFileName: ConverterPlugin.dll
 version: 1.0
 
 # Author of the plugin. The author can be a company or an individual developer.
-author: viki22uied
+author: Vignesh Kumar U
 
 # Copyright information.
-copyright: Copyright © 2026 viki22uied. All rights reserved.
+copyright: Copyright © 2026 Vignesh Kumar U. All rights reserved.
 
 # Minimum SDK version supported by the plugin.
 minimumLoupedeckVersion: 6.0

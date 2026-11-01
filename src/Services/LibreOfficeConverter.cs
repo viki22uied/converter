@@ -15,31 +15,35 @@ namespace Loupedeck.ConverterPlugin
 
         public String Message { get; init; }
 
-        public static ConversionResult Ok(String outputPath) =>
-            new() { Success = true, OutputPath = outputPath, Message = $"Converted to {Path.GetFileName(outputPath)}" };
+        // True when the requested format could not be produced and a PDF was created instead.
+        public Boolean UsedFallback { get; init; }
+
+        public static ConversionResult Ok(String outputPath, String message, Boolean usedFallback = false) =>
+            new() { Success = true, OutputPath = outputPath, Message = message, UsedFallback = usedFallback };
 
         public static ConversionResult Fail(String message) =>
             new() { Success = false, Message = message };
     }
 
-    // Converts documents by driving a headless LibreOffice process.
+    // One of the external conversion engines the plugin drives.
+    public enum EngineKind
+    {
+        LibreOffice,
+        Pandoc,
+    }
+
+    // Drives a headless LibreOffice process to perform a single conversion step.
     //
-    // LibreOffice is invoked as:
     //     soffice --headless --norestore --convert-to <filter> --outdir <dir> <input>
     //
-    // A private, per-conversion user-installation profile is used so conversions still work
-    // when the user already has LibreOffice open, and concurrent conversions do not clash.
+    // A private, per-step user-installation profile is used so conversions still work while
+    // the user has LibreOffice open, and concurrent conversions do not clash.
     public static class LibreOfficeConverter
     {
         private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
 
-        // Attempts to locate the `soffice` executable: an explicit setting first, then the
-        // standard install locations, then anything on the PATH.
-        public static Boolean TryLocateSoffice(Plugin plugin, out String path)
-        {
-            var settings = new ConverterSettings(plugin);
-            return TryLocateSoffice(settings.SofficePath, out path);
-        }
+        public static Boolean TryLocateSoffice(Plugin plugin, out String path) =>
+            TryLocateSoffice(new ConverterSettings(plugin).SofficePath, out path);
 
         public static Boolean TryLocateSoffice(String configuredPath, out String path)
         {
@@ -51,7 +55,7 @@ namespace Loupedeck.ConverterPlugin
                 return true;
             }
 
-            foreach (var candidate in CandidateSofficePaths())
+            foreach (var candidate in CandidatePaths())
             {
                 if (File.Exists(candidate))
                 {
@@ -60,8 +64,7 @@ namespace Loupedeck.ConverterPlugin
                 }
             }
 
-            // Fall back to resolving via PATH.
-            var onPath = ResolveFromPath(IsWindows() ? "soffice.exe" : "soffice");
+            var onPath = ProcessRunner.ResolveFromPath(OperatingSystem.IsWindows() ? "soffice.exe" : "soffice");
             if (onPath != null)
             {
                 path = onPath;
@@ -71,29 +74,17 @@ namespace Loupedeck.ConverterPlugin
             return false;
         }
 
-        public static ConversionResult Convert(Plugin plugin, String inputPath, ConversionFormat format)
+        // Runs a single LibreOffice conversion of `inputPath` to `target` into `outputDir`.
+        // Returns the output file path on success, or null (with `error` set) on failure.
+        public static String RunStep(Plugin plugin, String inputPath, ConversionFormat target, String outputDir, out String error)
         {
-            if (format == null)
+            error = null;
+
+            if (!TryLocateSoffice(plugin, out var soffice))
             {
-                return ConversionResult.Fail("No output format selected.");
+                error = "LibreOffice not found.";
+                return null;
             }
-
-            if (String.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
-            {
-                return ConversionResult.Fail($"Input file not found: {inputPath}");
-            }
-
-            var settings = new ConverterSettings(plugin);
-
-            if (!TryLocateSoffice(settings.SofficePath, out var soffice))
-            {
-                return ConversionResult.Fail(
-                    "LibreOffice not found. Install it from libreoffice.org or set 'SofficePath' in the plugin settings.");
-            }
-
-            var outputDir = String.IsNullOrWhiteSpace(settings.OutputFolder)
-                ? Path.GetDirectoryName(inputPath)
-                : settings.OutputFolder;
 
             try
             {
@@ -101,113 +92,67 @@ namespace Loupedeck.ConverterPlugin
             }
             catch (Exception ex)
             {
-                return ConversionResult.Fail($"Cannot create output folder '{outputDir}': {ex.Message}");
-            }
-
-            // Guard against a no-op conversion (same extension, same folder).
-            var expectedOutput = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + "." + format.Extension);
-            if (String.Equals(Path.GetFullPath(expectedOutput), Path.GetFullPath(inputPath), StringComparison.OrdinalIgnoreCase))
-            {
-                return ConversionResult.Fail($"File is already a {format.DisplayName} in the output folder.");
+                error = $"Cannot create output folder: {ex.Message}";
+                return null;
             }
 
             var profileDir = Path.Combine(Path.GetTempPath(), "LogiConverter_" + Guid.NewGuid().ToString("N"));
-            var profileUri = new Uri(profileDir).AbsoluteUri;
-
             var args = new List<String>
             {
                 "--headless",
                 "--norestore",
                 "--nologo",
                 "--nofirststartwizard",
-                $"-env:UserInstallation={profileUri}",
-                "--convert-to", format.Filter,
-                "--outdir", outputDir,
-                inputPath,
+                $"-env:UserInstallation={new Uri(profileDir).AbsoluteUri}",
             };
+
+            // Help LibreOffice open PDFs as editable documents (PDF -> Word, etc.).
+            if (String.Equals(Path.GetExtension(inputPath), ".pdf", StringComparison.OrdinalIgnoreCase)
+                && !String.Equals(target.Extension, "pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add("--infilter=writer_pdf_import");
+            }
+
+            args.Add("--convert-to");
+            args.Add(target.Filter);
+            args.Add("--outdir");
+            args.Add(outputDir);
+            args.Add(inputPath);
 
             try
             {
-                var (exitCode, stdout, stderr) = RunProcess(soffice, args, DefaultTimeout);
+                var (exitCode, stdout, stderr) = ProcessRunner.Run(soffice, args, DefaultTimeout);
+                var expected = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + "." + target.Extension);
 
-                if (File.Exists(expectedOutput))
+                if (File.Exists(expected))
                 {
-                    PluginLog.Info($"Converted '{inputPath}' -> '{expectedOutput}'");
-                    return ConversionResult.Ok(expectedOutput);
+                    return expected;
                 }
 
-                var detail = String.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
-                PluginLog.Error($"Conversion failed (exit {exitCode}): {detail}");
-                return ConversionResult.Fail($"Conversion failed. {Truncate(detail, 160)}".Trim());
+                error = $"LibreOffice could not produce {target.DisplayName} (exit {exitCode}). {ProcessRunner.Tail(stderr, stdout)}".Trim();
+                return null;
             }
             catch (Exception ex)
             {
-                PluginLog.Error(ex, "Conversion process error");
-                return ConversionResult.Fail($"Conversion error: {ex.Message}");
+                error = $"LibreOffice error: {ex.Message}";
+                return null;
             }
             finally
             {
-                TryDeleteDirectory(profileDir);
+                ProcessRunner.TryDeleteDirectory(profileDir);
             }
         }
 
-        private static (Int32 exitCode, String stdout, String stderr) RunProcess(String fileName, IEnumerable<String> arguments, TimeSpan timeout)
+        private static IEnumerable<String> CandidatePaths()
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = fileName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            foreach (var arg in arguments)
-            {
-                psi.ArgumentList.Add(arg);
-            }
-
-            var stdout = new StringBuilder();
-            var stderr = new StringBuilder();
-
-            using var process = new Process { StartInfo = psi };
-            process.OutputDataReceived += (_, e) => { if (e.Data != null) { stdout.AppendLine(e.Data); } };
-            process.ErrorDataReceived += (_, e) => { if (e.Data != null) { stderr.AppendLine(e.Data); } };
-
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            if (!process.WaitForExit((Int32)timeout.TotalMilliseconds))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                    // Best effort.
-                }
-
-                throw new TimeoutException($"LibreOffice did not finish within {timeout.TotalSeconds:0} seconds.");
-            }
-
-            // Ensure async buffers are flushed.
-            process.WaitForExit();
-
-            return (process.ExitCode, stdout.ToString(), stderr.ToString());
-        }
-
-        private static IEnumerable<String> CandidateSofficePaths()
-        {
-            if (IsWindows())
+            if (OperatingSystem.IsWindows())
             {
                 var pf = Environment.GetEnvironmentVariable("ProgramFiles") ?? @"C:\Program Files";
                 var pf86 = Environment.GetEnvironmentVariable("ProgramFiles(x86)") ?? @"C:\Program Files (x86)";
                 yield return Path.Combine(pf, "LibreOffice", "program", "soffice.exe");
                 yield return Path.Combine(pf86, "LibreOffice", "program", "soffice.exe");
             }
-            else if (IsMacOs())
+            else if (OperatingSystem.IsMacOS())
             {
                 yield return "/Applications/LibreOffice.app/Contents/MacOS/soffice";
             }
@@ -216,53 +161,6 @@ namespace Loupedeck.ConverterPlugin
                 yield return "/usr/bin/soffice";
                 yield return "/usr/local/bin/soffice";
                 yield return "/opt/libreoffice/program/soffice";
-            }
-        }
-
-        private static String ResolveFromPath(String executable)
-        {
-            var pathVar = Environment.GetEnvironmentVariable("PATH");
-            if (String.IsNullOrEmpty(pathVar))
-            {
-                return null;
-            }
-
-            foreach (var dir in pathVar.Split(Path.PathSeparator))
-            {
-                if (String.IsNullOrWhiteSpace(dir))
-                {
-                    continue;
-                }
-
-                var candidate = Path.Combine(dir.Trim(), executable);
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
-
-            return null;
-        }
-
-        private static Boolean IsWindows() => OperatingSystem.IsWindows();
-
-        private static Boolean IsMacOs() => OperatingSystem.IsMacOS();
-
-        private static String Truncate(String value, Int32 max) =>
-            String.IsNullOrEmpty(value) || value.Length <= max ? value?.Trim() : value.Substring(0, max).Trim() + "…";
-
-        private static void TryDeleteDirectory(String dir)
-        {
-            try
-            {
-                if (Directory.Exists(dir))
-                {
-                    Directory.Delete(dir, recursive: true);
-                }
-            }
-            catch
-            {
-                // Temp profile cleanup is best effort.
             }
         }
     }

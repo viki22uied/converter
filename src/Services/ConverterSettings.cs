@@ -15,6 +15,7 @@ namespace Loupedeck.ConverterPlugin
         private const String KeySourceFolder = "SourceFolder";
         private const String KeyOutputFolder = "OutputFolder";
         private const String KeySofficePath = "SofficePath";
+        private const String KeyPandocPath = "PandocPath";
 
         private readonly Plugin _plugin;
 
@@ -52,6 +53,14 @@ namespace Loupedeck.ConverterPlugin
         {
             get => this._plugin.TryGetPluginSetting(KeySofficePath, out var value) ? value : String.Empty;
             set => this._plugin.SetPluginSetting(KeySofficePath, value, false);
+        }
+
+        // Optional explicit path to the Pandoc executable. When empty the converter
+        // auto-detects the standard install location for the OS.
+        public String PandocPath
+        {
+            get => this._plugin.TryGetPluginSetting(KeyPandocPath, out var value) ? value : String.Empty;
+            set => this._plugin.SetPluginSetting(KeyPandocPath, value, false);
         }
 
         private static String DefaultSourceFolder()

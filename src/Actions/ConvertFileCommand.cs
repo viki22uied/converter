@@ -34,7 +34,7 @@ namespace Loupedeck.ConverterPlugin
                 return;
             }
 
-            var result = ConvertRunner.Run(this.Plugin, format);
+            var result = ConvertRunner.RunLatest(this.Plugin, format);
             this._lastStatus = result.Success ? "Done" : "Failed";
             this.ActionImageChanged(actionParameter);
         }

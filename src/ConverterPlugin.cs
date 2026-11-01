@@ -24,17 +24,31 @@ namespace Loupedeck.ConverterPlugin
         {
             PluginLog.Info("ConverterPlugin loaded.");
 
-            // Surface a clear, actionable warning if the conversion engine is missing,
-            // instead of silently failing the first time the user runs an action.
-            if (!LibreOfficeConverter.TryLocateSoffice(this, out var sofficePath))
+            // Surface clear, actionable warnings if an engine is missing, instead of silently
+            // failing the first time the user runs an action. Both are free:
+            //   LibreOffice  -> office formats <-> PDF, PDF -> Word, spreadsheets.
+            //   Pandoc       -> Word <-> PowerPoint, Markdown/HTML -> anything.
+            if (LibreOfficeConverter.TryLocateSoffice(this, out var sofficePath))
             {
-                PluginLog.Warning(
-                    "LibreOffice was not found. File conversion will not work until LibreOffice is installed " +
-                    "or its path is set in the plugin settings (key 'SofficePath'). Download it from https://www.libreoffice.org/download/.");
+                PluginLog.Info($"Using LibreOffice at: {sofficePath}");
             }
             else
             {
-                PluginLog.Info($"Using LibreOffice at: {sofficePath}");
+                PluginLog.Warning(
+                    "LibreOffice was not found. Most conversions need it. Install it from " +
+                    "https://www.libreoffice.org/download/ (or set 'SofficePath' in the plugin settings).");
+            }
+
+            if (PandocConverter.TryLocate(this, out var pandocPath))
+            {
+                PluginLog.Info($"Using Pandoc at: {pandocPath}");
+            }
+            else
+            {
+                PluginLog.Warning(
+                    "Pandoc was not found. Cross-format conversions such as Word→PowerPoint and " +
+                    "Markdown→anything need it. Install it from https://pandoc.org/installing.html " +
+                    "(or set 'PandocPath' in the plugin settings).");
             }
         }
 

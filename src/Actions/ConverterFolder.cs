@@ -36,7 +36,7 @@ namespace Loupedeck.ConverterPlugin
                 return;
             }
 
-            ConvertRunner.Run(this.Plugin, format);
+            ConvertRunner.RunLatest(this.Plugin, format);
             this.CommandImageChanged(actionParameter);
         }
 
