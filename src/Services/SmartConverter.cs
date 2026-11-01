@@ -17,7 +17,7 @@ namespace Loupedeck.ConverterPlugin
         private const String PandocInstallUrl = "https://pandoc.org/installing.html";
         private const String LibreInstallUrl = "https://www.libreoffice.org/download/";
 
-        public static ConversionResult Convert(Plugin plugin, String inputPath, ConversionFormat requested, String outputFolderOverride = null)
+        public static ConversionResult Convert(Plugin plugin, String inputPath, ConversionFormat requested, String outputFolderOverride = null, String outputPath = null)
         {
             if (requested == null)
             {
@@ -30,7 +30,10 @@ namespace Loupedeck.ConverterPlugin
             }
 
             var settings = new ConverterSettings(plugin);
+            // An explicit outputPath comes from the Save As dialog: the user chose it (and
+            // confirmed any overwrite), so it is used exactly.
             var finalDir =
+                !String.IsNullOrWhiteSpace(outputPath) ? Path.GetDirectoryName(outputPath) :
                 !String.IsNullOrWhiteSpace(outputFolderOverride) ? outputFolderOverride :
                 !String.IsNullOrWhiteSpace(settings.OutputFolder) ? settings.OutputFolder :
                 Path.GetDirectoryName(inputPath);
@@ -44,7 +47,8 @@ namespace Loupedeck.ConverterPlugin
                 return ConversionResult.Fail($"Cannot create output folder '{finalDir}': {ex.Message}");
             }
 
-            var finalPath = Path.Combine(finalDir, Path.GetFileNameWithoutExtension(inputPath) + "." + requested.Extension);
+            var finalPath = outputPath ?? Path.Combine(finalDir, Path.GetFileNameWithoutExtension(inputPath) + "." + requested.Extension);
+            var overwrite = outputPath != null;
 
             // Already in the requested format in the requested place: nothing to do.
             if (String.Equals(Path.GetFullPath(finalPath), Path.GetFullPath(inputPath), StringComparison.OrdinalIgnoreCase))
@@ -55,21 +59,21 @@ namespace Loupedeck.ConverterPlugin
             var engines = EngineAvailability.Snapshot(plugin);
 
             // Try the planned routes to the requested format.
-            if (TryRun(plugin, inputPath, requested, finalPath, engines, out var produced, out var missingTools))
+            if (TryRun(plugin, inputPath, requested, finalPath, overwrite, engines, out var produced, out var missingTools))
             {
-                return ConversionResult.Ok(finalPath, $"Converted to {requested.DisplayName}: {Path.GetFileName(produced)}");
+                return ConversionResult.Ok(produced, $"Converted to {requested.DisplayName}. Saved to {produced}");
             }
 
             // Last resort: produce a PDF, which works for almost anything.
             if (!String.Equals(requested.Id, "pdf", StringComparison.OrdinalIgnoreCase))
             {
                 var pdf = ConversionFormat.Pdf;
-                var pdfPath = Path.Combine(finalDir, Path.GetFileNameWithoutExtension(inputPath) + "." + pdf.Extension);
-                if (TryRun(plugin, inputPath, pdf, pdfPath, engines, out var pdfProduced, out _))
+                var pdfPath = Path.ChangeExtension(finalPath, pdf.Extension);
+                if (TryRun(plugin, inputPath, pdf, pdfPath, false, engines, out var pdfProduced, out _))
                 {
                     return ConversionResult.Ok(
                         pdfProduced,
-                        $"Couldn't make a {requested.DisplayName} from this file, so it was saved as PDF: {Path.GetFileName(pdfProduced)}",
+                        $"Couldn't make a {requested.DisplayName} from this file, so it was saved as PDF instead. Saved to {pdfProduced}",
                         usedFallback: true);
                 }
             }
@@ -96,6 +100,7 @@ namespace Loupedeck.ConverterPlugin
             String inputPath,
             ConversionFormat target,
             String finalPath,
+            Boolean overwrite,
             EngineAvailability engines,
             out String producedPath,
             out HashSet<EngineKind> missingTools)
@@ -118,7 +123,7 @@ namespace Loupedeck.ConverterPlugin
                     continue;
                 }
 
-                if (Execute(plugin, inputPath, pipeline, finalPath, out producedPath))
+                if (Execute(plugin, inputPath, pipeline, finalPath, overwrite, out producedPath))
                 {
                     PluginLog.Info($"Pipeline [{String.Join(", ", pipeline)}] succeeded.");
                     return true;
@@ -130,7 +135,7 @@ namespace Loupedeck.ConverterPlugin
 
         // Executes one pipeline through a temp working directory, then moves the final output
         // to `finalPath`.
-        private static Boolean Execute(Plugin plugin, String inputPath, IReadOnlyList<ConversionStep> pipeline, String finalPath, out String producedPath)
+        private static Boolean Execute(Plugin plugin, String inputPath, IReadOnlyList<ConversionStep> pipeline, String finalPath, Boolean overwrite, out String producedPath)
         {
             producedPath = null;
             var work = Path.Combine(Path.GetTempPath(), "LogiConvertWork_" + Guid.NewGuid().ToString("N"));
@@ -157,19 +162,19 @@ namespace Loupedeck.ConverterPlugin
 
                 // Move the final intermediate to the requested destination. The temp working
                 // directory is often on a different volume than the output folder, where
-                // File.Move can fail, so fall back to copy + delete.
-                if (File.Exists(finalPath))
+                // File.Move can fail, so fall back to copy. Only overwrite when the user confirmed it.
+                if (!overwrite)
                 {
-                    File.Delete(finalPath);
+                    finalPath = UniquePath(finalPath);
                 }
 
                 try
                 {
-                    File.Move(current, finalPath);
+                    File.Move(current, finalPath, overwrite);
                 }
                 catch (IOException)
                 {
-                    File.Copy(current, finalPath, overwrite: true);
+                    File.Copy(current, finalPath, overwrite);
                 }
 
                 producedPath = finalPath;
@@ -184,6 +189,20 @@ namespace Loupedeck.ConverterPlugin
             {
                 ProcessRunner.TryDeleteDirectory(work);
             }
+        }
+
+        // "report.docx" -> "report (1).docx", "report (2).docx", ... until the name is free.
+        internal static String UniquePath(String path)
+        {
+            var dir = Path.GetDirectoryName(path);
+            var name = Path.GetFileNameWithoutExtension(path);
+            var ext = Path.GetExtension(path);
+            for (var i = 1; File.Exists(path); i++)
+            {
+                path = Path.Combine(dir, $"{name} ({i}){ext}");
+            }
+
+            return path;
         }
     }
 

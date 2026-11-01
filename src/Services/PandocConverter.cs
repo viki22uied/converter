@@ -66,7 +66,8 @@ namespace Loupedeck.ConverterPlugin
 
             var expected = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + "." + target.Extension);
 
-            var args = new List<String>();
+            // --sandbox: input is often an untrusted download; stop it embedding local files or fetching URLs.
+            var args = new List<String> { "--sandbox" };
             var inputFormat = PandocInputFormat(inputPath);
             if (inputFormat != null)
             {

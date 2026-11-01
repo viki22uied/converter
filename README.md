@@ -4,7 +4,7 @@ Convert **any file to any format** — PDF, Word, PowerPoint, Excel, Markdown, H
 
 Everything runs **locally and for free** — nothing is uploaded, no account, no API key.
 
-Built with the [Logi Actions SDK](https://logitech.github.io/actions-sdk-docs/) (C# / .NET 8).
+Built with the [Logi Actions SDK](https://logitech.github.io/actions-sdk-docs/) (C# / .NET 10).
 
 > 🏆 Developed by **Vignesh Kumar U** — a **Top 50** project (team Deep Work) at the **Logitech Dev Studio Hackathon**.
 
@@ -76,7 +76,7 @@ Declared in `src/package/metadata/LoupedeckPackage.yaml`:
 ## Prerequisites
 
 1. **Logi Options+** — installs the Logi Plugin Service that hosts the plugin. <https://www.logitech.com/software/logi-options-plus.html>
-2. **.NET 8 SDK** (to build). <https://dotnet.microsoft.com/download/dotnet/8.0>
+2. **.NET 10 SDK** (to build; current Logi Plugin Service ships a .NET 10 PluginApi). <https://dotnet.microsoft.com/download/dotnet/10.0>
 3. **Logi Plugin Tool** (to package/install): `dotnet tool install --global LogiPluginTool`
 4. **LibreOffice** and **Pandoc** (the conversion engines, see table above).
 
@@ -118,7 +118,7 @@ Stored in the host's per-plugin settings store (the **Convert a File** action al
 | Setting key | Meaning | Default |
 | --- | --- | --- |
 | `SourceFolder` | Folder scanned for the newest file | Downloads → Desktop → user profile |
-| `OutputFolder` | Where converted files are written | *(empty)* = next to the source file |
+| `OutputFolder` | Where converted files are written | *(empty)* = ask in a Save As window each time (Windows) |
 | `SofficePath` | Explicit path to LibreOffice `soffice` | *(empty)* = auto-detect |
 | `PandocPath` | Explicit path to `pandoc` | *(empty)* = auto-detect |
 
@@ -141,7 +141,7 @@ Example — PDF → PowerPoint:
 ```
 ConverterPlugin.sln
 src/
-  ConverterPlugin.csproj          # net8.0, references PluginApi.dll
+  ConverterPlugin.csproj          # net10.0, references PluginApi.dll
   ConverterPlugin.cs              # Plugin entry point; checks for both engines on load
   Actions/
     ConvertAction.cs              # Main configurable action (format picker + options)
@@ -172,6 +172,35 @@ src/
 - Package with `logiplugintool pack` and run `logiplugintool verify ./Converter.lplug4` before uploading.
 - Bump `version` for each release.
 - Because conversion relies on LibreOffice and Pandoc, state in your listing that users install those two free tools. (The plugin invokes them as separate programs, so its own MIT license is unaffected by Pandoc's GPL.)
+
+---
+
+## Privacy
+
+- Runs entirely on your computer. Files are never uploaded.
+- Collects no personal data, has no telemetry, needs no account and makes no network connections.
+- Pandoc runs with `--sandbox`, so a converted document can't pull in other local files or fetch URLs.
+
+## What it does with your files
+
+- Reads the file you selected in Explorer (or the newest file in the source folder if none is selected).
+- Writes the converted copy where you choose in the Save As window, or to the output folder you configured.
+- Never deletes your files, and never overwrites one unless you confirm it in the Save As window.
+
+## Third-party software
+
+The plugin drives two free programs that you install separately. Neither is bundled with or modified by this plugin.
+
+| Software | License | Website |
+| --- | --- | --- |
+| LibreOffice | MPL 2.0 | <https://www.libreoffice.org/> |
+| Pandoc | GPL 2.0 or later | <https://pandoc.org/> |
+
+Because they run as separate programs, the plugin's own MIT license is unaffected. Logi Options+, the Logi Plugin Service and the Logi Actions SDK are products of Logitech; this plugin is an independent project and is not made or endorsed by Logitech.
+
+## Platform support
+
+Built and tested on **Windows**. The Explorer-selection and Save As features are Windows-only; on macOS the plugin falls back to the newest file in the source folder and saves next to it (untested).
 
 ---
 

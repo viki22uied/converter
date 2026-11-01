@@ -52,6 +52,10 @@ namespace Loupedeck.ConverterPlugin
 
                 inputPath = request.InputPath;
             }
+            else if (ExplorerSelection.TryGetSelectedFile() is { } selected && File.Exists(selected))
+            {
+                inputPath = selected;
+            }
             else
             {
                 var folder = String.IsNullOrWhiteSpace(request.SourceFolder) ? settings.SourceFolder : request.SourceFolder;
@@ -62,7 +66,21 @@ namespace Loupedeck.ConverterPlugin
             }
 
             PluginLog.Info($"Converting '{inputPath}' to {request.Format.DisplayName}...");
-            var result = SmartConverter.Convert(plugin, inputPath, request.Format, request.OutputFolder);
+            // Let the user choose where to save, unless they fixed an output folder up front.
+            String outputPath = null;
+            if (OperatingSystem.IsWindows()
+                && String.IsNullOrWhiteSpace(request.OutputFolder)
+                && String.IsNullOrWhiteSpace(settings.OutputFolder))
+            {
+                var suggested = Path.ChangeExtension(inputPath, request.Format.Extension);
+                outputPath = SaveDialog.Ask(suggested, request.Format);
+                if (outputPath == null)
+                {
+                    return Report(plugin, ConversionResult.Ok(null, "Conversion cancelled."));
+                }
+            }
+
+            var result = SmartConverter.Convert(plugin, inputPath, request.Format, request.OutputFolder, outputPath);
 
             if (result.Success && request.OpenAfter)
             {

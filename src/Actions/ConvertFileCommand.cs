@@ -11,7 +11,7 @@ namespace Loupedeck.ConverterPlugin
     // a dial press, or the Actions Ring.
     public class ConvertFileCommand : PluginDynamicCommand
     {
-        private const String GroupName = "Convert Latest File";
+        private const String LatestGroupName = "Convert Latest File";
 
         // The display name shown on a button briefly reflects the last conversion result.
         private String _lastStatus = String.Empty;
@@ -21,7 +21,7 @@ namespace Loupedeck.ConverterPlugin
         {
             foreach (var format in ConversionFormat.All)
             {
-                this.AddParameter(format.Id, $"Convert to {format.DisplayName}", GroupName);
+                this.AddParameter(format.Id, $"Convert to {format.DisplayName}", LatestGroupName);
             }
         }
 

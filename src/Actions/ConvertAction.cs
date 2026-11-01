@@ -39,7 +39,7 @@ namespace Loupedeck.ConverterPlugin
 
             this.ActionEditor.AddControlEx(
                 new ActionEditorTextbox(ControlOutput, "Save the converted file to")
-                    .SetPlaceholder("Leave empty to save next to the original file"));
+                    .SetPlaceholder("Leave empty to choose in a Save As window each time"));
 
             this.ActionEditor.AddControlEx(
                 new ActionEditorCheckbox(ControlOpen, "Open the file after converting")
