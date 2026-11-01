@@ -1,0 +1,48 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build (Debug)",
+      "type": "shell",
+      "command": "dotnet build -c Debug",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build (Release)",
+      "type": "shell",
+      "command": "dotnet build -c Release",
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Watch (hot reload)",
+      "type": "shell",
+      "command": "dotnet watch build",
+      "options": { "cwd": "${workspaceFolder}/src" },
+      "group": "build",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Package Plugin (.lplug4)",
+      "type": "shell",
+      "command": "logiplugintool pack ./bin/Release ./Converter.lplug4",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Install Plugin",
+      "type": "shell",
+      "command": "logiplugintool install ./Converter.lplug4",
+      "group": "none",
+      "problemMatcher": []
+    },
+    {
+      "label": "Uninstall Plugin",
+      "type": "shell",
+      "command": "logiplugintool uninstall Converter",
+      "group": "none",
+      "problemMatcher": []
+    }
+  ]
+}
