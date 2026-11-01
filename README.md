@@ -213,3 +213,5 @@ Developed by **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied)) 
 ## License
 
 [MIT](LICENSE) © Vignesh Kumar U
+
+End users: see the [End User License Agreement](EULA.md). Logitech is not a party to it.

@@ -46,6 +46,8 @@
       <PackageFiles Include="package\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(PackageFiles)" DestinationFolder="$(OutputPath)..\%(RecursiveDir)" />
+    <!-- Ship the license and end-user agreement inside the .lplug4 (Marketplace Developer Agreement 7.1, 11.1). -->
+    <Copy SourceFiles="..\LICENSE;..\EULA.md" DestinationFolder="$(OutputPath)..\" />
   </Target>
 
   <!-- Write the development .link file and ask the service to reload the plugin. -->
