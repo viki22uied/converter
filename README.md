@@ -6,6 +6,8 @@ Everything runs **locally and for free** — nothing is uploaded, no account, no
 
 Built with the [Logi Actions SDK](https://logitech.github.io/actions-sdk-docs/) (C# / .NET 8).
 
+> 🏆 Created by **Team Deep Work AI** — a **Top 50** project in the **Logitech Dev Studio Hackathon**.
+
 ---
 
 ## What makes it a real converter
@@ -173,6 +175,14 @@ src/
 
 ---
 
+## Credits
+
+Created by **Team Deep Work AI** — recognised as a **Top 50** project in the **Logitech Dev Studio Hackathon**.
+
+- **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied))
+
+---
+
 ## License
 
-[MIT](LICENSE) © Vignesh Kumar U
+[MIT](LICENSE) © Vignesh Kumar U · Team Deep Work AI
