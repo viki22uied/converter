@@ -24,6 +24,19 @@ It doesn't just push everything to PDF. A built-in **routing engine** chains two
 | Markdown → PowerPoint | Pandoc | ✅ |
 | HTML → Word | Pandoc | ✅ |
 | Office ↔ Office, anything → PDF | LibreOffice | ✅ |
+| Word / PowerPoint / Excel / PDF → PNG or JPG | LibreOffice | ✅ first page only |
+| HTML → PNG or JPG | LibreOffice → LibreOffice (via PDF) | ✅ first page only |
+| Word / PowerPoint / Excel / PDF → HTML | LibreOffice | ✅ |
+| Markdown → HTML, Word → HTML | Pandoc | ✅ |
+| Word / HTML / Markdown → Plain Text | LibreOffice or Pandoc | ✅ |
+| Word / PDF / HTML / Markdown → ODT | LibreOffice or Pandoc | ✅ |
+| PowerPoint → Word / ODT | LibreOffice (via PDF) | ✅ text boxes, not flowing text |
+| PDF → Word | LibreOffice (PDF import) | ✅ text boxes, not flowing text |
+| PDF → Plain Text | LibreOffice (via Word) | ⚠️ most text is lost |
+| PowerPoint / Excel → Plain Text | — | ❌ saves a PDF instead |
+| Word / PowerPoint / PDF / HTML → Excel | — | ❌ saves a PDF instead |
+
+*Verified with LibreOffice 26.8 and Pandoc 3.13 on Windows, on sample Word, PowerPoint, Excel, PDF, HTML and Markdown files. "Saves a PDF instead" is the built-in fallback: the plugin tells you it could not make that format.*
 
 When a conversion needs two steps (e.g. PDF → PowerPoint goes PDF → Word → PowerPoint), the plugin does it automatically behind the scenes through a temporary file. You just pick the output format and press.
 
