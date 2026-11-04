@@ -10,7 +10,9 @@ namespace Loupedeck.ConverterPlugin
     //     pandoc [-f <input format>] <input> -o <output>
     public static class PandocConverter
     {
-        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
+        // Long enough for a 600-slide deck or a 200-page PDF on an ordinary PC. A step that fails
+        // slowly stops the whole conversion (see SmartConverter), so this is also the longest wait.
+        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
 
         public static Boolean TryLocate(Plugin plugin, out String path) =>
             TryLocate(new ConverterSettings(plugin).PandocPath, out path);
@@ -66,9 +68,18 @@ namespace Loupedeck.ConverterPlugin
 
             var expected = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + "." + target.Extension);
 
-            // --sandbox: input is often an untrusted download; stop it embedding local files or fetching URLs.
-            var args = new List<String> { "--sandbox" };
+            // Images are looked up next to the source file.
+            var args = new List<String> { "--resource-path=" + Path.GetDirectoryName(Path.GetFullPath(inputPath)) };
             var inputFormat = PandocInputFormat(inputPath);
+
+            // --sandbox: an HTML page is often an untrusted download; stop it embedding local files
+            // or fetching URLs. Markdown is usually the user's own and needs its local images, which
+            // --sandbox would drop.
+            if (inputFormat == null)
+            {
+                args.Add("--sandbox");
+            }
+
             if (inputFormat != null)
             {
                 args.Add("-f");
@@ -82,7 +93,8 @@ namespace Loupedeck.ConverterPlugin
             try
             {
                 var (exitCode, stdout, stderr) = ProcessRunner.Run(pandoc, args, DefaultTimeout);
-                if (File.Exists(expected))
+                // An empty file is not a result (e.g. a spreadsheet saved as text).
+                if (File.Exists(expected) && new FileInfo(expected).Length > 0)
                 {
                     return expected;
                 }
@@ -90,7 +102,7 @@ namespace Loupedeck.ConverterPlugin
                 error = $"Pandoc could not produce {target.DisplayName} (exit {exitCode}). {ProcessRunner.Tail(stderr, stdout)}".Trim();
                 return null;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not TimeoutException)
             {
                 error = $"Pandoc error: {ex.Message}";
                 return null;

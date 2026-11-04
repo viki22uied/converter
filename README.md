@@ -6,7 +6,7 @@ Everything runs **locally and for free** — nothing is uploaded, no account, no
 
 Built with the [Logi Actions SDK](https://logitech.github.io/actions-sdk-docs/) (C# / .NET 10).
 
-> 🏆 Developed by **Vignesh Kumar U** — a **Top 50** project (team Deep Work) at the **Logitech Dev Studio Hackathon**.
+An independent side project by **Vignesh Kumar U**.
 
 ---
 
@@ -63,10 +63,11 @@ All actions appear in Logi Options+ under the **File Converter** plugin and can 
 
 ### Which file gets converted?
 
-- **Convert a File** action: the file you pick in its settings, or — if you leave that blank — the **newest file** in the folder you name (your **Downloads** folder by default).
-- Quick buttons / dial / folder: always the **newest file** in the source folder (Downloads by default).
+- **Convert a File** action: the file you pick in its settings, if you set one.
+- Otherwise, the file selected in the active File Explorer window (Windows).
+- If nothing is selected, the **newest file** in the source folder (**Downloads** by default).
 
-The converted file is saved next to the original (or in an output folder you choose), keeping the original name with the new extension.
+On Windows, a Save As window asks where to save the result unless you set an output folder.
 
 ---
 
@@ -132,7 +133,7 @@ Stored in the host's per-plugin settings store (the **Convert a File** action al
 
 ## How the routing works
 
-For a requested conversion the plugin asks `ConversionPlanner` for candidate pipelines, ordered fewest-steps / highest-fidelity first, using **DOCX as a universal hub** (both engines read and write it well) and **PDF as the final safety net**. It then runs each candidate through a temporary working directory and keeps the first that actually produces a file — so even if the "best" route fails on an unusual input, a working route is used. A private, per-step LibreOffice profile is used so conversions work even while you have LibreOffice open.
+For a requested conversion the plugin asks `ConversionPlanner` for candidate pipelines, ordered fewest-steps / highest-fidelity first, using **DOCX as a universal hub** (both engines read and write it well) and **PDF as the final safety net**. It then runs each candidate through a temporary working directory and keeps the first that actually produces a file — so even if the "best" route fails on an unusual input, a working route is used. A private LibreOffice profile, reused between conversions, is used so conversions work even while you have LibreOffice open.
 
 ```
 Example — PDF → PowerPoint:
@@ -184,8 +185,9 @@ src/
 ## Privacy
 
 - Runs entirely on your computer. Files are never uploaded.
-- Collects no personal data, has no telemetry, needs no account and makes no network connections.
-- Pandoc runs with `--sandbox`, so a converted document can't pull in other local files or fetch URLs.
+- Collects no personal data, has no telemetry, needs no account, and the plugin itself makes no network connections.
+- For HTML files, Pandoc runs with `--sandbox`, so a downloaded web page can't pull in other local files or fetch URLs.
+- For Markdown files, Pandoc includes the images the file links to, so it can read pictures on your computer and download pictures that are linked by web address.
 
 ## What it does with your files
 
@@ -212,7 +214,7 @@ Built and tested on **Windows**. The Explorer-selection and Save As features are
 
 ## Credits
 
-Developed by **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied)) — a **Top 50** project at the **Logitech Dev Studio Hackathon** (team Deep Work).
+Designed and developed by **Vignesh Kumar U** ([@viki22uied](https://github.com/viki22uied)).
 
 ---
 

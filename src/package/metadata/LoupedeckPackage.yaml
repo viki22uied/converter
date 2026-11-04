@@ -12,7 +12,7 @@ name: Converter
 displayName: File Converter
 
 # Short description of the plugin.
-description: Convert any file to PDF, Word, PowerPoint, Excel, Markdown and more — Word→PowerPoint, PDF→Word, Markdown→PowerPoint and back — with a single press, dial or Actions Ring tap. Powered by LibreOffice and Pandoc. Developed by Vignesh Kumar U, a Top 50 project (team Deep Work) at the Logitech Dev Studio Hackathon.
+description: Convert any file to PDF, Word, PowerPoint, Excel, Markdown and more — Word→PowerPoint, PDF→Word, Markdown→PowerPoint and back — with a single press, dial or Actions Ring tap. Powered by LibreOffice and Pandoc. Developed by Vignesh Kumar U.
 
 # Name of the plugin library file.
 pluginFileName: ConverterPlugin.dll

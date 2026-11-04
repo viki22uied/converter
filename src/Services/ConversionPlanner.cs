@@ -66,6 +66,15 @@ namespace Loupedeck.ConverterPlugin
 
             var candidates = new List<IReadOnlyList<ConversionStep>>();
 
+            // Routes that never work, found by testing: only spreadsheets become Excel, and
+            // spreadsheets only become PDF, HTML or images. Return nothing so the caller goes
+            // straight to the PDF fallback instead of waiting for every route to fail.
+            var family = ConversionFormat.FamilyOf(sourcePath);
+            if (NeverWorks(family, target.Id))
+            {
+                return candidates;
+            }
+
             void Add(params ConversionStep[] steps) => candidates.Add(steps);
 
             // 1) Single-step Pandoc (best fidelity for Word<->PPT, Markdown/HTML -> *).
@@ -106,8 +115,27 @@ namespace Loupedeck.ConverterPlugin
                 }
             }
 
+            // LibreOffice can't save a presentation as a text document directly; going through
+            // PDF works. Trying the direct route first wastes a full load of the deck.
+            if (family == DocumentFamily.Presentation && target.Id is "docx" or "odt")
+            {
+                candidates.RemoveAll(p => p[0].Engine == EngineKind.LibreOffice && p[0].Target.Id is "docx" or "odt");
+            }
+
             return Dedupe(candidates);
         }
+
+        // Combinations that failed for every sample in testing: only spreadsheets become Excel,
+        // spreadsheets only become PDF, HTML or images, and slides, pictures and drawings have no
+        // text to save as plain text.
+        private static Boolean NeverWorks(DocumentFamily family, String target) => target switch
+        {
+            "xlsx" => family != DocumentFamily.Spreadsheet,
+            "docx" or "odt" => family == DocumentFamily.Spreadsheet,
+            "pptx" => family is DocumentFamily.Spreadsheet or DocumentFamily.Image or DocumentFamily.Drawing,
+            "txt" => family is DocumentFamily.Spreadsheet or DocumentFamily.Presentation or DocumentFamily.Image or DocumentFamily.Drawing,
+            _ => false,
+        };
 
         private static IEnumerable<ConversionStep> FirstStepsToDocx(String src, ConversionFormat docx)
         {

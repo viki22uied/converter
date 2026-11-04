@@ -29,6 +29,11 @@ namespace Loupedeck.ConverterPlugin
                 return ConversionResult.Fail("Couldn't find a file to convert.");
             }
 
+            if (new FileInfo(inputPath).Length == 0)
+            {
+                return ConversionResult.Fail($"{Path.GetFileName(inputPath)} is empty, so there is nothing to convert.");
+            }
+
             var settings = new ConverterSettings(plugin);
             // An explicit outputPath comes from the Save As dialog: the user chose it (and
             // confirmed any overwrite), so it is used exactly.
@@ -47,6 +52,11 @@ namespace Loupedeck.ConverterPlugin
                 return ConversionResult.Fail($"Cannot create output folder '{finalDir}': {ex.Message}");
             }
 
+            if (!CanWrite(finalDir))
+            {
+                return ConversionResult.Fail($"Can't save to '{finalDir}' because you don't have permission to write there. Choose another folder.");
+            }
+
             var finalPath = outputPath ?? Path.Combine(finalDir, Path.GetFileNameWithoutExtension(inputPath) + "." + requested.Extension);
             var overwrite = outputPath != null;
 
@@ -56,24 +66,34 @@ namespace Loupedeck.ConverterPlugin
                 return ConversionResult.Ok(inputPath, $"Already a {requested.DisplayName}.");
             }
 
+            if (!LooksLike(inputPath))
+            {
+                return ConversionResult.Fail($"{Path.GetFileName(inputPath)} isn't really a {Path.GetExtension(inputPath).TrimStart('.').ToUpperInvariant()} file. It may have been renamed or damaged.");
+            }
+
             var engines = EngineAvailability.Snapshot(plugin);
 
             // Try the planned routes to the requested format.
-            if (TryRun(plugin, inputPath, requested, finalPath, overwrite, engines, out var produced, out var missingTools))
+            if (TryRun(plugin, inputPath, requested, finalPath, overwrite, engines, out var produced, out var missingTools, out var timedOut))
             {
-                return ConversionResult.Ok(produced, $"Converted to {requested.DisplayName}. Saved to {produced}");
+                var note = requested.Id is "png" or "jpg" ? " (first page only)" : String.Empty;
+                return ConversionResult.Ok(produced, $"Converted to {requested.DisplayName}{note}. Saved to {produced}");
             }
+
+            var why = timedOut
+                ? $"This file is too large to make a {requested.DisplayName} in time"
+                : $"Couldn't make a {requested.DisplayName} from this file";
 
             // Last resort: produce a PDF, which works for almost anything.
             if (!String.Equals(requested.Id, "pdf", StringComparison.OrdinalIgnoreCase))
             {
                 var pdf = ConversionFormat.Pdf;
                 var pdfPath = Path.ChangeExtension(finalPath, pdf.Extension);
-                if (TryRun(plugin, inputPath, pdf, pdfPath, false, engines, out var pdfProduced, out _))
+                if (TryRun(plugin, inputPath, pdf, pdfPath, false, engines, out var pdfProduced, out _, out _))
                 {
                     return ConversionResult.Ok(
                         pdfProduced,
-                        $"Couldn't make a {requested.DisplayName} from this file, so it was saved as PDF instead. Saved to {pdfProduced}",
+                        $"{why}, so it was saved as PDF instead. Saved to {pdfProduced}",
                         usedFallback: true);
                 }
             }
@@ -89,7 +109,9 @@ namespace Loupedeck.ConverterPlugin
                 return ConversionResult.Fail($"Conversion needs LibreOffice (free). Install it from {LibreInstallUrl}, then try again.");
             }
 
-            return ConversionResult.Fail($"Couldn't convert {Path.GetFileName(inputPath)} to {requested.DisplayName}. The file may be open, corrupted or password-protected.");
+            return ConversionResult.Fail(timedOut
+                ? $"{Path.GetFileName(inputPath)} is too large to convert to {requested.DisplayName} in time. Try splitting it into smaller files."
+                : $"Couldn't convert {Path.GetFileName(inputPath)} to {requested.DisplayName}. The file may be open, corrupted or password-protected.");
         }
 
         // Runs candidate pipelines in order; on the first that produces a file, moves it to
@@ -103,9 +125,11 @@ namespace Loupedeck.ConverterPlugin
             Boolean overwrite,
             EngineAvailability engines,
             out String producedPath,
-            out HashSet<EngineKind> missingTools)
+            out HashSet<EngineKind> missingTools,
+            out Boolean timedOut)
         {
             producedPath = null;
+            timedOut = false;
             missingTools = new HashSet<EngineKind>();
 
             var candidates = ConversionPlanner.BuildCandidates(inputPath, target);
@@ -123,10 +147,31 @@ namespace Loupedeck.ConverterPlugin
                     continue;
                 }
 
-                if (Execute(plugin, inputPath, pipeline, finalPath, overwrite, out producedPath))
+                var started = DateTime.UtcNow;
+                try
                 {
-                    PluginLog.Info($"Pipeline [{String.Join(", ", pipeline)}] succeeded.");
-                    return true;
+                    if (Execute(plugin, inputPath, pipeline, finalPath, overwrite, out producedPath))
+                    {
+                        PluginLog.Info($"Pipeline [{String.Join(", ", pipeline)}] succeeded.");
+                        return true;
+                    }
+                }
+                catch (TimeoutException ex)
+                {
+                    // Other routes would hit the same limit on the same file, and each wait adds
+                    // minutes; stop here.
+                    PluginLog.Warning(ex, $"Pipeline [{String.Join(", ", pipeline)}] timed out");
+                    timedOut = true;
+                    return false;
+                }
+
+                // A route that took this long to fail means the file is heavy; the other routes
+                // load it the same way and would fail just as slowly.
+                if (DateTime.UtcNow - started > SlowFailure)
+                {
+                    PluginLog.Warning($"Pipeline [{String.Join(", ", pipeline)}] failed slowly; not trying other routes.");
+                    timedOut = true;
+                    return false;
                 }
             }
 
@@ -180,7 +225,7 @@ namespace Loupedeck.ConverterPlugin
                 producedPath = finalPath;
                 return true;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not TimeoutException)
             {
                 PluginLog.Warning(ex, "Pipeline execution error");
                 return false;
@@ -188,6 +233,57 @@ namespace Loupedeck.ConverterPlugin
             finally
             {
                 ProcessRunner.TryDeleteDirectory(work);
+            }
+        }
+
+        private static readonly TimeSpan SlowFailure = TimeSpan.FromSeconds(30);
+
+        // Checks the first bytes match the extension for the formats people most often get as
+        // renamed or broken downloads. Other types are left to the engines.
+        private static Boolean LooksLike(String path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            var magic = ext switch
+            {
+                ".pdf" => "%PDF",
+                ".docx" or ".xlsx" or ".pptx" or ".odt" or ".ods" or ".odp" => "PK",
+                _ => null,
+            };
+            if (magic == null)
+            {
+                return true;
+            }
+
+            var head = new Byte[magic.Length];
+            try
+            {
+                using var stream = File.OpenRead(path);
+                // A file shorter than the signature can't be valid.
+                if (stream.Read(head, 0, head.Length) < head.Length)
+                {
+                    return false;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return true; // Locked or unreadable: let the engine report it.
+            }
+
+            return System.Text.Encoding.ASCII.GetString(head) == magic;
+        }
+
+        private static Boolean CanWrite(String dir)
+        {
+            var probe = Path.Combine(dir, ".convert_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                File.WriteAllBytes(probe, Array.Empty<Byte>());
+                File.Delete(probe);
+                return true;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                return false;
             }
         }
 

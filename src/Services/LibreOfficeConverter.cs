@@ -36,11 +36,18 @@ namespace Loupedeck.ConverterPlugin
     //
     //     soffice --headless --norestore --convert-to <filter> --outdir <dir> <input>
     //
-    // A private, per-step user-installation profile is used so conversions still work while
-    // the user has LibreOffice open, and concurrent conversions do not clash.
+    // A private user-installation profile (separate from the user's own) is used so conversions still work while
+    // the user has LibreOffice open; steps share it one at a time.
     public static class LibreOfficeConverter
     {
-        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(120);
+        // Long enough for a 600-slide deck or a 200-page PDF on an ordinary PC. A step that fails
+        // slowly stops the whole conversion (see SmartConverter), so this is also the longest wait.
+        private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
+
+        // One private profile, reused: building a fresh one costs about 4 seconds per step.
+        // LibreOffice can't share a profile between running instances, so steps take turns.
+        private static readonly String ProfileDir = Path.Combine(Path.GetTempPath(), "LogiConverter_profile");
+        private static readonly Object ProfileLock = new();
 
         public static Boolean TryLocateSoffice(Plugin plugin, out String path) =>
             TryLocateSoffice(new ConverterSettings(plugin).SofficePath, out path);
@@ -96,14 +103,13 @@ namespace Loupedeck.ConverterPlugin
                 return null;
             }
 
-            var profileDir = Path.Combine(Path.GetTempPath(), "LogiConverter_" + Guid.NewGuid().ToString("N"));
             var args = new List<String>
             {
                 "--headless",
                 "--norestore",
                 "--nologo",
                 "--nofirststartwizard",
-                $"-env:UserInstallation={new Uri(profileDir).AbsoluteUri}",
+                $"-env:UserInstallation={new Uri(ProfileDir).AbsoluteUri}",
             };
 
             // Help LibreOffice open PDFs as editable documents (PDF -> Word, etc.).
@@ -121,10 +127,17 @@ namespace Loupedeck.ConverterPlugin
 
             try
             {
-                var (exitCode, stdout, stderr) = ProcessRunner.Run(soffice, args, DefaultTimeout);
+                Int32 exitCode;
+                String stdout, stderr;
+                lock (ProfileLock)
+                {
+                    (exitCode, stdout, stderr) = ProcessRunner.Run(soffice, args, DefaultTimeout);
+                }
+
                 var expected = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(inputPath) + "." + target.Extension);
 
-                if (File.Exists(expected))
+                // An empty file is not a result (e.g. a spreadsheet saved as text).
+                if (File.Exists(expected) && new FileInfo(expected).Length > 0)
                 {
                     return expected;
                 }
@@ -132,14 +145,10 @@ namespace Loupedeck.ConverterPlugin
                 error = $"LibreOffice could not produce {target.DisplayName} (exit {exitCode}). {ProcessRunner.Tail(stderr, stdout)}".Trim();
                 return null;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not TimeoutException)
             {
                 error = $"LibreOffice error: {ex.Message}";
                 return null;
-            }
-            finally
-            {
-                ProcessRunner.TryDeleteDirectory(profileDir);
             }
         }
 

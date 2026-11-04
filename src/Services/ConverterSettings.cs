@@ -30,12 +30,8 @@ namespace Loupedeck.ConverterPlugin
         {
             get
             {
-                if (this._plugin.TryGetPluginSetting(KeySourceFolder, out var value) && !String.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
-
-                return DefaultSourceFolder();
+                var value = this.Get(KeySourceFolder);
+                return String.IsNullOrWhiteSpace(value) ? DefaultSourceFolder() : value;
             }
             set => this._plugin.SetPluginSetting(KeySourceFolder, value, false);
         }
@@ -43,7 +39,7 @@ namespace Loupedeck.ConverterPlugin
         // Folder the converted file is written to. Empty means "same folder as the source file".
         public String OutputFolder
         {
-            get => this._plugin.TryGetPluginSetting(KeyOutputFolder, out var value) ? value : String.Empty;
+            get => this.Get(KeyOutputFolder);
             set => this._plugin.SetPluginSetting(KeyOutputFolder, value, false);
         }
 
@@ -51,7 +47,7 @@ namespace Loupedeck.ConverterPlugin
         // converter auto-detects the standard install location for the OS.
         public String SofficePath
         {
-            get => this._plugin.TryGetPluginSetting(KeySofficePath, out var value) ? value : String.Empty;
+            get => this.Get(KeySofficePath);
             set => this._plugin.SetPluginSetting(KeySofficePath, value, false);
         }
 
@@ -59,9 +55,13 @@ namespace Loupedeck.ConverterPlugin
         // auto-detects the standard install location for the OS.
         public String PandocPath
         {
-            get => this._plugin.TryGetPluginSetting(KeyPandocPath, out var value) ? value : String.Empty;
+            get => this.Get(KeyPandocPath);
             set => this._plugin.SetPluginSetting(KeyPandocPath, value, false);
         }
+
+        // Null plugin (e.g. the conversion test harness) means "no saved settings".
+        private String Get(String key) =>
+            this._plugin != null && this._plugin.TryGetPluginSetting(key, out var value) ? value ?? String.Empty : String.Empty;
 
         private static String DefaultSourceFolder()
         {
